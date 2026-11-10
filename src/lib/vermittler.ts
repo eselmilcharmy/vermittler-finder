@@ -17,7 +17,10 @@ export function parseRules(text: string): Rule[] {
     .split(/\r?\n/)
     .forEach((raw) => {
       const m = raw.match(LINE);
-      if (m) rules.push({ id: rules.length, from: m[1], to: m[2], name: m[3].replace(/\s+/g, " ").trim(), orgz: m[4], line: raw.trim() });
+      if (m) {
+        const [, from = "", to = "", name = "", orgz = ""] = m;
+        rules.push({ id: rules.length, from, to, name: name.replace(/\s+/g, " ").trim(), orgz, line: raw.trim() });
+      }
     });
   return rules;
 }
