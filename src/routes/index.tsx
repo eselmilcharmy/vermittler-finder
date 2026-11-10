@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Database, Search, Sparkles, UserRound, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
-import { parseRules, findMatch, inRange } from "@/lib/vermittler";
+import { parseRules, findMatch, inRange, type Rule } from "@/lib/vermittler";
 import { SAMPLE_DUMP } from "@/lib/sample";
 
 export const Route = createFileRoute("/")({
@@ -17,6 +17,39 @@ export const Route = createFileRoute("/")({
   }),
   component: Index,
 });
+
+function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname: string }) {
+  const n = rules.length;
+  const at = (o: number) => rules[(idx + o + n) % n]!;
+  const prev = at(-1), cur = at(0), next = at(1);
+  const card = (r: Rule, label: string, text: string, active = false) => (
+    <div className={`flex-1 rounded-xl border p-4 ${active ? "range-active" : "border-border bg-background"}`}>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 font-display text-lg font-semibold text-foreground">{r.name}</p>
+      <p className="font-mono text-xs text-muted-foreground">Team {r.orgz} · {r.from} – {r.to}</p>
+      <p className="mt-2 text-sm text-foreground">{text}</p>
+    </div>
+  );
+  return (
+    <div className="mt-6">
+      <h3 className="mb-3 font-display text-base font-semibold text-foreground">Übergabe-Rad: wer vorher und wer danach dran ist</h3>
+      <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
+        {card(prev, "Davor", `Nimmt alle Namen bis „${prev.to}“`)}
+        <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
+        {card(cur, "Zuständig", `Übernimmt ab „${cur.from}“ bis „${cur.to}“, also auch „${nachname}“`, true)}
+        <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
+        {card(next, "Danach", `Übernimmt ab „${next.from}“`)}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {rules.map((r, i) => (
+          <span key={r.id} title={r.name} className={`rounded-full px-2.5 py-1 font-mono text-xs ${i === idx ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>
+            {r.from}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Index() {
   const [vorname, setVorname] = useState("");
@@ -76,6 +109,7 @@ function Index() {
               <p className="mt-4 flex flex-wrap items-center gap-2 font-mono text-sm text-muted-foreground">
                 Bereich: <code className="chip">{match.from}</code> bis <code className="chip">{match.to}</code>
               </p>
+              <Wheel rules={rules} idx={rules.indexOf(match)} nachname={nachname} />
             </section>
           ) : (
             <section className="panel flex items-center gap-2 text-destructive"><AlertTriangle className="h-4 w-4" /> Kein passender Bereich für „{nachname}“ gefunden.</section>
