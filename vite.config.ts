@@ -9,8 +9,17 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+const repositoryName = process.env.GITHUB_REPOSITORY?.split("/")[1];
+
 export default defineConfig({
+  vite: {
+    base: repositoryName ? `/${repositoryName}/` : "/",
+  },
   tanstackStart: {
+    prerender: {
+      enabled: true,
+      failOnError: true,
+    },
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },

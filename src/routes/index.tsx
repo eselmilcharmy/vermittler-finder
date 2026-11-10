@@ -141,8 +141,8 @@ function Index() {
   );
 
   const loadSample = () => {
-    setVorname("Hermann");
-    setNachname("Peschke");
+    setVorname("Test");
+    setNachname("Nutzer");
     setDump(SAMPLE_DUMP);
   };
 
@@ -164,9 +164,9 @@ function Index() {
         <section className="panel">
           <h2 className="panel-title"><UserRound className="h-4 w-4" /> Person</h2>
           <label className="field-label">Vorname</label>
-          <input className="field" value={vorname} onChange={(e) => setVorname(e.target.value)} placeholder="z. B. Hermann" />
+          <input className="field" value={vorname} onChange={(e) => setVorname(e.target.value)} placeholder="z. B. Test" />
           <label className="field-label mt-4">Nachname</label>
-          <input className="field" value={nachname} onChange={(e) => setNachname(e.target.value)} placeholder="z. B. Peschke" />
+          <input className="field" value={nachname} onChange={(e) => setNachname(e.target.value)} placeholder="z. B. Nutzer" />
         </section>
         <section className="panel">
           <h2 className="panel-title"><Database className="h-4 w-4" /> Text-Dump <span className="ml-auto font-mono text-xs text-muted-foreground">{rules.length} Regeln erkannt</span></h2>
