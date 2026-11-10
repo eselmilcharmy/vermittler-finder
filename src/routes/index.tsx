@@ -20,10 +20,17 @@ export const Route = createFileRoute("/")({
 
 function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname: string }) {
   const n = rules.length;
-  const at = (o: number) => rules[(idx + o + n) % n]!;
-  const prev = at(-1), cur = at(0), next = at(1);
-  const card = (r: Rule, label: string, text: string, active = false) => (
-    <div className={`flex-1 rounded-xl border p-4 ${active ? "range-active" : "border-border bg-background"}`}>
+  const prev = rules[idx - 1];
+  const cur = rules[idx]!;
+  const next = rules[idx + 1];
+  const card = (r: Rule, label: string, text: string, role: RangeRole) => (
+    <div
+      className={`flex-1 rounded-xl border p-4 ${role === "current" ? "range-active" : ""}`}
+      style={role === "current" ? undefined : {
+        borderColor: roleColors[role],
+        backgroundColor: role === "previous" ? "oklch(0.97 0.04 92)" : "oklch(0.97 0.03 25)",
+      }}
+    >
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 font-display text-lg font-semibold text-foreground">{r.name}</p>
       <p className="font-mono text-xs text-muted-foreground">Team {r.orgz} · {r.from} – {r.to}</p>
@@ -34,11 +41,11 @@ function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname:
     <div className="mt-6">
       <h3 className="mb-3 font-display text-base font-semibold text-foreground">Übergabe-Rad: wer vorher und wer danach dran ist</h3>
       <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
-        {card(prev, "Davor", `Nimmt alle Namen bis „${prev.to}“`)}
-        <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
-        {card(cur, "Zuständig", `Übernimmt ab „${cur.from}“ bis „${cur.to}“, also auch „${nachname}“`, true)}
-        <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
-        {card(next, "Danach", `Übernimmt ab „${next.from}“`)}
+        {prev && card(prev, "Davor · gelb", `Bis einschließlich „${prev.to}“`, "previous")}
+        {prev && <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 md:rotate-0" style={{ color: roleColors.previous }} />}
+        {card(cur, "Zuständig · grün", `Ab einschließlich „${cur.from}“ bis einschließlich „${cur.to}“; „${nachname}“ liegt hier`, "current")}
+        {next && <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 md:rotate-0" style={{ color: roleColors.next }} />}
+        {next && card(next, "Danach · rot", `Ab einschließlich „${next.from}“`, "next")}
       </div>
       <SpinWheel rules={rules} idx={idx} nachname={nachname} />
     </div>
@@ -46,7 +53,12 @@ function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname:
 }
 
 const ABC = "abcdefghijklmnopqrstuvwxyz".split("");
-const ruleHue = (i: number, n: number) => (i * 360) / n;
+const roleColors = {
+  previous: "oklch(0.88 0.16 92)",
+  current: "var(--success)",
+  next: "var(--destructive)",
+} as const;
+type RangeRole = keyof typeof roleColors;
 
 function owners(key: string, rules: Rule[]) {
   const k = key.length;
@@ -55,71 +67,131 @@ function owners(key: string, rules: Rule[]) {
 
 function SpinWheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname: string }) {
   const name = norm(nachname);
-  const levels = Math.max(1, Math.min(name.length, 4));
-  const [spun, setSpun] = useState(false);
+  const levels = Math.max(1, Math.min(name.length, 6));
+  const previous = rules[idx - 1];
+  const next = rules[idx + 1];
+  const current = rules[idx]!;
+  const roles = new Map<number, RangeRole>();
+  if (previous) roles.set(previous.id, "previous");
+  roles.set(current.id, "current");
+  if (next) roles.set(next.id, "next");
+  const [visibleLevels, setVisibleLevels] = useState(0);
   useEffect(() => {
-    setSpun(false);
-    const t = setTimeout(() => setSpun(true), 50);
-    return () => clearTimeout(t);
-  }, [name, idx]);
-  const C = 260, r0 = 45, w = 52, seg = 360 / 26;
-  const pt = (a: number, r: number) => {
-    const rad = ((a - 90) * Math.PI) / 180;
-    return [C + r * Math.cos(rad), C + r * Math.sin(rad)];
-  };
-  const arc = (a0: number, a1: number, ri: number, ro: number) => {
-    const [x0, y0] = pt(a0, ro), [x1, y1] = pt(a1, ro), [x2, y2] = pt(a1, ri), [x3, y3] = pt(a0, ri);
-    return `M${x0},${y0} A${ro},${ro} 0 0 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 0 0 ${x3},${y3} Z`;
-  };
-  const used = new Set<number>();
-  const rings = Array.from({ length: levels }, (_, l) => {
-    const prefix = name.slice(0, l);
-    const target = ABC.indexOf(name[l] ?? "a");
-    const ri = r0 + l * w, ro = ri + w - 2;
-    const rot = spun ? 720 + 360 * l - (target + 0.5) * seg : 0;
-    return (
-      <g key={l} style={{ transform: `rotate(${rot}deg)`, transformOrigin: `${C}px ${C}px`, transition: `transform ${2.5 + l * 0.6}s cubic-bezier(.17,.67,.2,1)` }}>
-        {ABC.map((c, i) => {
-          const key = prefix + c;
-          const own = owners(key, rules);
-          const a0 = i * seg, a1 = (i + 1) * seg, hit = i === target;
-          const [tx, ty] = pt(a0 + seg / 2, ri + w / 2 - 1);
-          return (
-            <g key={c}>
-              {own.map((r, j) => {
-                used.add(r.id);
-                const s0 = a0 + (j * seg) / own.length, s1 = a0 + ((j + 1) * seg) / own.length;
-                return <path key={r.id} d={arc(s0, s1, ri, ro)} style={{ fill: r.id === idx && hit ? "var(--success)" : `oklch(0.82 0.1 ${ruleHue(r.id, rules.length)})`, stroke: "var(--card)", strokeWidth: 1 }}><title>{`${key.toUpperCase()}…: ${r.name} (${r.from}–${r.to})`}</title></path>;
-              })}
-              {hit && <path d={arc(a0, a1, ri, ro)} style={{ fill: "none", stroke: "var(--foreground)", strokeWidth: 2 }} />}
-              <text x={tx} y={ty} transform={`rotate(${a0 + seg / 2} ${tx} ${ty})`} textAnchor="middle" dominantBaseline="middle"
-                style={{ fontSize: l === 0 ? 13 : 10, fontFamily: "var(--font-mono)", fontWeight: hit ? 700 : 400, fill: "var(--foreground)", pointerEvents: "none" }}>
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </text>
-            </g>
-          );
-        })}
-      </g>
+    setVisibleLevels(1);
+    let timer: number | undefined;
+    const revealNext = (level: number) => {
+      timer = window.setTimeout(() => {
+        const nextLevel = level + 1;
+        setVisibleLevels(nextLevel);
+        if (nextLevel < levels) revealNext(nextLevel);
+      }, 900);
+    };
+    if (levels > 1) revealNext(1);
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [name, idx, levels]);
+
+  const rows = Array.from({ length: visibleLevels }, (_, level) => {
+    const prefix = name.slice(0, level);
+    const selectedLetter = name[level]!;
+    const selectedIndex = ABC.indexOf(selectedLetter);
+    const letters = [ABC[selectedIndex - 1], selectedLetter, ABC[selectedIndex + 1]].filter(
+      (letter): letter is string => letter !== undefined,
     );
+    const rangeLabel = prefix
+      ? `${prefix.toUpperCase()}a–${prefix.toUpperCase()}z`
+      : "A–Z";
+
+    return {
+      level,
+      prefix,
+      rangeLabel,
+      selectedLetter,
+      cells: letters.map((letter) => {
+        const key = prefix + letter;
+        const isSelected = letter === selectedLetter;
+        const isBefore = ABC.indexOf(letter) < selectedIndex;
+        const candidates = owners(key, rules);
+        const owner = isSelected
+          ? current
+          : candidates.find((rule) => rule.id !== current.id) ?? candidates[0];
+        const role = isSelected ? "current" : owner && owner.id !== current.id ? roles.get(owner.id) : undefined;
+        const boundaryLabel = isSelected
+          ? key.toUpperCase()
+          : `${key}${(isBefore ? "z" : "a").repeat(Math.max(1, 3 - key.length))}`.toUpperCase();
+
+        return { key, letter, owner, role, isSelected, boundaryLabel };
+      }),
+    };
   });
-  const legend = rules.filter((r) => used.has(r.id));
+  const legend = [...(previous ? [previous] : []), current, ...(next ? [next] : [])];
+  const visiblePrefix = name.slice(0, visibleLevels);
+  const displayedRows = [...rows].reverse();
   return (
-    <div className="mt-8 grid items-center gap-6 md:grid-cols-[1fr_220px]">
-      <div className="relative mx-auto w-full max-w-[520px]">
-        <div className="wheel-pointer" />
-        <svg viewBox="0 0 520 520" className="w-full">
-          {rings}
-          <circle cx={C} cy={C} r={r0 - 2} style={{ fill: "var(--card)", stroke: "var(--border)" }} />
-          <text x={C} y={C} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)", fill: "var(--foreground)" }}>
-            {name.slice(0, levels).toUpperCase()}
-          </text>
-        </svg>
+    <div className="mt-8 grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="space-y-3">
+        {visibleLevels >= levels && (
+          <div className="flex flex-wrap items-baseline justify-between gap-3 rounded-xl border-2 border-success bg-success-soft px-4 py-3" role="status">
+            <span className="text-xs font-semibold uppercase text-success">Endgültige Zuordnung · {visiblePrefix.toUpperCase()}</span>
+            <span className="font-display text-lg font-bold text-foreground">{current.name}</span>
+            <span className="font-mono text-sm text-success">Team {current.orgz}</span>
+          </div>
+        )}
+        {displayedRows.map((row) => (
+          <section
+            key={row.level}
+            className="rounded-xl border border-border bg-background p-4"
+            style={{ animation: row.level === visibleLevels - 1 ? "drill-focus 500ms ease-out both" : undefined }}
+          >
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h4 className="font-display text-sm font-semibold text-foreground">
+                Ebene {row.level + 1}: {row.rangeLabel}
+              </h4>
+              <span className="font-mono text-xs text-muted-foreground">
+                Gesucht: {row.prefix.toUpperCase()}{row.selectedLetter.toUpperCase()}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {row.cells.map((cell) => (
+                <div
+                  key={cell.key}
+                  className={`min-w-0 rounded-lg border p-3 ${cell.isSelected ? "range-active" : "border-border bg-card"}`}
+                  style={!cell.isSelected && cell.role ? {
+                    borderColor: roleColors[cell.role],
+                    backgroundColor: cell.role === "previous" ? "oklch(0.97 0.04 92)" : "oklch(0.97 0.03 25)",
+                  } : undefined}
+                >
+                  <p className="font-mono text-lg font-bold text-foreground">
+                    {cell.boundaryLabel}
+                    {cell.isSelected && <span className="ml-2 text-xs font-medium text-success">Treffer</span>}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-medium text-foreground">
+                    {cell.owner?.name ?? "Kein Bereich erkannt"}
+                  </p>
+                  {cell.owner && (
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      Team {cell.owner.orgz} · {cell.owner.from}–{cell.owner.to}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+        {visibleLevels > 0 && (
+          <p className="text-center font-mono text-xs text-muted-foreground">
+            {visiblePrefix.length < name.length
+              ? `Nächste Ebene wird innerhalb von „${visiblePrefix.toUpperCase()}…“ geöffnet`
+              : `Zuordnung bis „${visiblePrefix.toUpperCase()}“ verfeinert`}
+          </p>
+        )}
       </div>
       <ul className="space-y-1.5 text-sm">
-        <li className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Farben = Vermittler</li>
+        <li className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Bereichsrollen</li>
         {legend.map((r) => (
           <li key={r.id} className={`flex items-center gap-2 ${r.id === idx ? "font-bold text-foreground" : "text-muted-foreground"}`}>
-            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: r.id === idx ? "var(--success)" : `oklch(0.82 0.1 ${ruleHue(r.id, rules.length)})` }} />
+            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: roleColors[roles.get(r.id) ?? "current"] }} />
             <span className="font-mono text-xs">{r.from}–{r.to}</span> {r.name}
           </li>
         ))}
