@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Database, Search, Sparkles, UserRound, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
-import { parseRules, findMatch, inRange, type Rule } from "@/lib/vermittler";
+import { parseRules, findMatch, inRange, norm, type Rule } from "@/lib/vermittler";
 import { SAMPLE_DUMP } from "@/lib/sample";
 
 export const Route = createFileRoute("/")({
@@ -40,52 +40,90 @@ function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname:
         <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
         {card(next, "Danach", `Übernimmt ab „${next.from}“`)}
       </div>
-      <SpinWheel rules={rules} idx={idx} />
+      <SpinWheel rules={rules} idx={idx} nachname={nachname} />
     </div>
   );
 }
 
-function SpinWheel({ rules, idx }: { rules: Rule[]; idx: number }) {
-  const n = rules.length;
-  const seg = 360 / n;
-  const [rot, setRot] = useState(0);
+const ABC = "abcdefghijklmnopqrstuvwxyz".split("");
+const ruleHue = (i: number, n: number) => (i * 360) / n;
+
+function owners(key: string, rules: Rule[]) {
+  const k = key.length;
+  return rules.filter((r) => norm(r.from).slice(0, k) <= key && key <= norm(r.to).slice(0, k));
+}
+
+function SpinWheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname: string }) {
+  const name = norm(nachname);
+  const levels = Math.max(1, Math.min(name.length, 4));
+  const [spun, setSpun] = useState(false);
   useEffect(() => {
-    const center = (idx + 0.5) * seg;
-    setRot((prev) => Math.ceil(prev / 360) * 360 + 1080 - center);
-  }, [idx, seg]);
-  const R = 250, C = 260;
+    setSpun(false);
+    const t = setTimeout(() => setSpun(true), 50);
+    return () => clearTimeout(t);
+  }, [name, idx]);
+  const C = 260, r0 = 45, w = 52, seg = 360 / 26;
   const pt = (a: number, r: number) => {
     const rad = ((a - 90) * Math.PI) / 180;
     return [C + r * Math.cos(rad), C + r * Math.sin(rad)];
   };
+  const arc = (a0: number, a1: number, ri: number, ro: number) => {
+    const [x0, y0] = pt(a0, ro), [x1, y1] = pt(a1, ro), [x2, y2] = pt(a1, ri), [x3, y3] = pt(a0, ri);
+    return `M${x0},${y0} A${ro},${ro} 0 0 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 0 0 ${x3},${y3} Z`;
+  };
+  const used = new Set<number>();
+  const rings = Array.from({ length: levels }, (_, l) => {
+    const prefix = name.slice(0, l);
+    const target = ABC.indexOf(name[l] ?? "a");
+    const ri = r0 + l * w, ro = ri + w - 2;
+    const rot = spun ? 720 + 360 * l - (target + 0.5) * seg : 0;
+    return (
+      <g key={l} style={{ transform: `rotate(${rot}deg)`, transformOrigin: `${C}px ${C}px`, transition: `transform ${2.5 + l * 0.6}s cubic-bezier(.17,.67,.2,1)` }}>
+        {ABC.map((c, i) => {
+          const key = prefix + c;
+          const own = owners(key, rules);
+          const a0 = i * seg, a1 = (i + 1) * seg, hit = i === target;
+          const [tx, ty] = pt(a0 + seg / 2, ri + w / 2 - 1);
+          return (
+            <g key={c}>
+              {own.map((r, j) => {
+                used.add(r.id);
+                const s0 = a0 + (j * seg) / own.length, s1 = a0 + ((j + 1) * seg) / own.length;
+                return <path key={r.id} d={arc(s0, s1, ri, ro)} style={{ fill: r.id === idx && hit ? "var(--success)" : `oklch(0.82 0.1 ${ruleHue(r.id, rules.length)})`, stroke: "var(--card)", strokeWidth: 1 }}><title>{`${key.toUpperCase()}…: ${r.name} (${r.from}–${r.to})`}</title></path>;
+              })}
+              {hit && <path d={arc(a0, a1, ri, ro)} style={{ fill: "none", stroke: "var(--foreground)", strokeWidth: 2 }} />}
+              <text x={tx} y={ty} transform={`rotate(${a0 + seg / 2} ${tx} ${ty})`} textAnchor="middle" dominantBaseline="middle"
+                style={{ fontSize: l === 0 ? 13 : 10, fontFamily: "var(--font-mono)", fontWeight: hit ? 700 : 400, fill: "var(--foreground)", pointerEvents: "none" }}>
+                {key.charAt(0).toUpperCase() + key.slice(1)}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    );
+  });
+  const legend = rules.filter((r) => used.has(r.id));
   return (
-    <div className="mt-8 flex justify-center">
-      <div className="relative w-full max-w-[520px]">
+    <div className="mt-8 grid items-center gap-6 md:grid-cols-[1fr_220px]">
+      <div className="relative mx-auto w-full max-w-[520px]">
         <div className="wheel-pointer" />
-        <svg viewBox="0 0 520 520" className="w-full" style={{ transform: `rotate(${rot}deg)`, transition: "transform 3.5s cubic-bezier(.17,.67,.2,1)" }}>
-          {rules.map((r, i) => {
-            const a0 = i * seg, a1 = (i + 1) * seg;
-            const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R);
-            const mid = a0 + seg / 2;
-            const [tx, ty] = pt(mid, R - 12);
-            const hue = (i * 360) / n;
-            return (
-              <g key={r.id}>
-                <path d={`M${C},${C} L${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1} Z`}
-                  style={{ fill: i === idx ? "var(--success)" : `oklch(0.82 0.09 ${hue})`, stroke: "var(--card)", strokeWidth: 1.5 }} />
-                <text x={tx} y={ty} transform={`rotate(${mid + 90} ${tx} ${ty})`} textAnchor="end" dominantBaseline="middle"
-                  style={{ fontSize: 9, fontFamily: "var(--font-mono)", fill: i === idx ? "var(--success-foreground)" : "var(--foreground)", fontWeight: i === idx ? 700 : 400 }}>
-                  {r.from}–{r.to} {r.name.split(",")[0]}
-                </text>
-              </g>
-            );
-          })}
-          <circle cx={C} cy={C} r={40} style={{ fill: "var(--card)", stroke: "var(--border)" }} />
+        <svg viewBox="0 0 520 520" className="w-full">
+          {rings}
+          <circle cx={C} cy={C} r={r0 - 2} style={{ fill: "var(--card)", stroke: "var(--border)" }} />
+          <text x={C} y={C} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)", fill: "var(--foreground)" }}>
+            {name.slice(0, levels).toUpperCase()}
+          </text>
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="font-mono text-xs font-bold text-foreground">Team {rules[idx]?.orgz}</span>
-        </div>
       </div>
+      <ul className="space-y-1.5 text-sm">
+        <li className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Farben = Vermittler</li>
+        {legend.map((r) => (
+          <li key={r.id} className={`flex items-center gap-2 ${r.id === idx ? "font-bold text-foreground" : "text-muted-foreground"}`}>
+            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: r.id === idx ? "var(--success)" : `oklch(0.82 0.1 ${ruleHue(r.id, rules.length)})` }} />
+            <span className="font-mono text-xs">{r.from}–{r.to}</span> {r.name}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
