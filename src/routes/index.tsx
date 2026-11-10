@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Database, Search, Sparkles, UserRound, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 import { parseRules, findMatch, inRange, type Rule } from "@/lib/vermittler";
 import { SAMPLE_DUMP } from "@/lib/sample";
@@ -40,12 +40,51 @@ function Wheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachname:
         <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-success md:rotate-0" />
         {card(next, "Danach", `Übernimmt ab „${next.from}“`)}
       </div>
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {rules.map((r, i) => (
-          <span key={r.id} title={r.name} className={`rounded-full px-2.5 py-1 font-mono text-xs ${i === idx ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>
-            {r.from}
-          </span>
-        ))}
+      <SpinWheel rules={rules} idx={idx} />
+    </div>
+  );
+}
+
+function SpinWheel({ rules, idx }: { rules: Rule[]; idx: number }) {
+  const n = rules.length;
+  const seg = 360 / n;
+  const [rot, setRot] = useState(0);
+  useEffect(() => {
+    const center = (idx + 0.5) * seg;
+    setRot((prev) => Math.ceil(prev / 360) * 360 + 1080 - center);
+  }, [idx, seg]);
+  const R = 250, C = 260;
+  const pt = (a: number, r: number) => {
+    const rad = ((a - 90) * Math.PI) / 180;
+    return [C + r * Math.cos(rad), C + r * Math.sin(rad)];
+  };
+  return (
+    <div className="mt-8 flex justify-center">
+      <div className="relative w-full max-w-[520px]">
+        <div className="wheel-pointer" />
+        <svg viewBox="0 0 520 520" className="w-full" style={{ transform: `rotate(${rot}deg)`, transition: "transform 3.5s cubic-bezier(.17,.67,.2,1)" }}>
+          {rules.map((r, i) => {
+            const a0 = i * seg, a1 = (i + 1) * seg;
+            const [x0, y0] = pt(a0, R), [x1, y1] = pt(a1, R);
+            const mid = a0 + seg / 2;
+            const [tx, ty] = pt(mid, R - 12);
+            const hue = (i * 360) / n;
+            return (
+              <g key={r.id}>
+                <path d={`M${C},${C} L${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1} Z`}
+                  style={{ fill: i === idx ? "var(--success)" : `oklch(0.82 0.09 ${hue})`, stroke: "var(--card)", strokeWidth: 1.5 }} />
+                <text x={tx} y={ty} transform={`rotate(${mid + 90} ${tx} ${ty})`} textAnchor="end" dominantBaseline="middle"
+                  style={{ fontSize: 9, fontFamily: "var(--font-mono)", fill: i === idx ? "var(--success-foreground)" : "var(--foreground)", fontWeight: i === idx ? 700 : 400 }}>
+                  {r.from}–{r.to} {r.name.split(",")[0]}
+                </text>
+              </g>
+            );
+          })}
+          <circle cx={C} cy={C} r={40} style={{ fill: "var(--card)", stroke: "var(--border)" }} />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="font-mono text-xs font-bold text-foreground">Team {rules[idx]?.orgz}</span>
+        </div>
       </div>
     </div>
   );
