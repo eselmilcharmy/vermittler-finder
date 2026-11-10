@@ -143,6 +143,38 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+:root {
+  --background: oklch(0.975 0.006 85);
+  --foreground: oklch(0.22 0.02 250);
+  --card: oklch(1 0 0);
+  --primary: oklch(0.32 0.07 250);
+  --primary-foreground: oklch(0.98 0.005 85);
+  --muted-foreground: oklch(0.5 0.02 250);
+  --border: oklch(0.9 0.01 85);
+  --success: oklch(0.6 0.15 155);
+  --success-foreground: oklch(0.99 0 0);
+  --success-soft: oklch(0.95 0.05 155);
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "DM Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --shadow-soft: 0 4px 14px -6px color-mix(in oklab, var(--primary) 40%, transparent);
+}
+
+@utility panel { @apply rounded-2xl border border-border bg-card p-6; }
+@utility panel-title { @apply mb-4 flex items-center gap-2 font-display text-lg font-semibold text-foreground; }
+@utility field-label { @apply mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground; }
+@utility field { @apply w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary; }
+@utility chip { @apply rounded-md bg-muted px-2 py-0.5 text-foreground; }
+@utility range-row { @apply flex flex-wrap items-center gap-4 rounded-xl border border-border px-4 py-3 transition; }
+@utility range-active { @apply border-2 border-success bg-success-soft; box-shadow: 0 0 22px -4px var(--success); }
+@utility match-glow { @apply border-2; box-shadow: 0 0 30px -8px var(--success); }
+
 @layer base {
   * {
     border-color: var(--color-border);
