@@ -173,6 +173,12 @@
 @utility chip { @apply rounded-md bg-muted px-2 py-0.5 text-foreground; }
 @utility range-row { @apply flex flex-wrap items-center gap-4 rounded-xl border border-border px-4 py-3 transition; }
 @utility range-active { @apply border-2 border-success bg-success-soft; box-shadow: 0 0 22px -4px var(--success); }
+@utility wheel-pointer {
+  @apply absolute left-1/2 -top-1 z-10 -translate-x-1/2;
+  width: 0; height: 0;
+  border-left: 14px solid transparent; border-right: 14px solid transparent;
+  border-top: 26px solid var(--primary);
+}
 @utility match-glow { @apply border-2; box-shadow: 0 0 30px -8px var(--success); }
 
 @layer base {
