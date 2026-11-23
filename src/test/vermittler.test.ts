@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findMatch, parseRules } from "@/lib/vermittler";
+import { findMatch, parseDkzRules, parseRules } from "@/lib/vermittler";
 
 describe("parseRules", () => {
   it("parses SharePoint rows that inherit a team number from the section", () => {
@@ -56,5 +56,32 @@ D — F  Example, Two  456`);
 
     expect(rules).toHaveLength(2);
     expect(rules.map(({ orgz }) => orgz)).toEqual(["123", "456"]);
+  });
+});
+
+describe("parseDkzRules", () => {
+  it("parses three-digit DKZ rows and matches only within the selected DKZ", () => {
+    const dump = `DKZ Anfangsbuchstabe Nachname Name, Vorname OrgZ
+011 A-Beta Example, Alpha 123
+011 Betb-Derr Example Beta 123
+012 A-Z Different Person 124
+232 A-M Example, Gamma 122
+232 N Example, Delta 121`;
+
+    const rules = parseDkzRules(dump);
+    const rulesFor011 = rules.filter((rule) => rule.dkz === "011");
+    const rulesFor232 = rules.filter((rule) => rule.dkz === "232");
+
+    expect(rules).toHaveLength(5);
+    expect(rules[0]).toMatchObject({
+      dkz: "011",
+      from: "A",
+      to: "Beta",
+      name: "Example, Alpha",
+      orgz: "123",
+    });
+    expect(findMatch("Betcman", rulesFor011)?.name).toBe("Example Beta");
+    expect(findMatch("Bender", rules.filter((rule) => rule.dkz === "012"))?.name).toBe("Different Person");
+    expect(findMatch("Nachmann", rulesFor232)?.name).toBe("Example, Delta");
   });
 });

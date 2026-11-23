@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Database, Search, Sparkles, UserRound, ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
-import { parseRules, findMatch, inRange, norm, type Rule } from "@/lib/vermittler";
+import { parseDkzRules, parseRules, findMatch, inRange, norm, type Rule } from "@/lib/vermittler";
 import { SAMPLE_DUMP } from "@/lib/sample";
 
 export const Route = createFileRoute("/")({
@@ -119,7 +119,7 @@ function SpinWheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachn
         const role = isSelected ? "current" : owner && owner.id !== current.id ? roles.get(owner.id) : undefined;
         const boundaryLabel = isSelected
           ? key.toUpperCase()
-          : `${key}${(isBefore ? "z" : "a").repeat(Math.max(1, 3 - key.length))}`.toUpperCase();
+          : `${key}${(isBefore ? "z" : "a").repeat(Math.max(0, 3 - key.length))}`.toUpperCase();
 
         return { key, letter, owner, role, isSelected, boundaryLabel };
       }),
@@ -203,11 +203,28 @@ function SpinWheel({ rules, idx, nachname }: { rules: Rule[]; idx: number; nachn
 function Index() {
   const [vorname, setVorname] = useState("");
   const [nachname, setNachname] = useState("");
+  const [dkz, setDkz] = useState("");
   const [dump, setDump] = useState("");
   const [filter, setFilter] = useState("");
 
-  const rules = useMemo(() => parseRules(dump), [dump]);
-  const match = useMemo(() => (nachname.trim() ? findMatch(nachname, rules) : null), [nachname, rules]);
+  const parsedRules = useMemo(() => parseRules(dump), [dump]);
+  const dkzRules = useMemo(() => parseDkzRules(dump), [dump]);
+  const isDkzDump = dkzRules.length > 0;
+  const rules = useMemo(
+    () => (isDkzDump ? dkzRules.filter((rule) => rule.dkz === dkz) : parsedRules),
+    [dkz, dkzRules, isDkzDump, parsedRules],
+  );
+  const dkzCount = new Set(dkzRules.map((rule) => rule.dkz)).size;
+  const dkzReady = !isDkzDump || /^\d{3}$/.test(dkz);
+  const ruleCountLabel = isDkzDump
+    ? dkzReady
+      ? `${rules.length} Regeln für DKZ ${dkz}`
+      : `${dkzCount} DKZ · ${dkzRules.length} Regeln`
+    : `${rules.length} Regeln erkannt`;
+  const match = useMemo(
+    () => (nachname.trim() && dkzReady ? findMatch(nachname, rules) : null),
+    [dkzReady, nachname, rules],
+  );
   const shown = rules.filter((r) =>
     `${r.from} ${r.to} ${r.name} ${r.orgz}`.toLowerCase().includes(filter.toLowerCase()),
   );
@@ -239,18 +256,49 @@ function Index() {
           <input className="field" value={vorname} onChange={(e) => setVorname(e.target.value)} placeholder="z. B. Test" />
           <label className="field-label mt-4">Nachname</label>
           <input className="field" value={nachname} onChange={(e) => setNachname(e.target.value)} placeholder="z. B. Nutzer" />
+          {isDkzDump && (
+            <>
+              <label className="field-label mt-4" htmlFor="dkz-input">DKZ (3-stellig)</label>
+              <input
+                id="dkz-input"
+                className="field"
+                value={dkz}
+                onChange={(event) => setDkz(event.target.value.replace(/\D/g, "").slice(0, 3))}
+                inputMode="numeric"
+                maxLength={3}
+                pattern="[0-9]{3}"
+                placeholder="z. B. 613"
+                aria-describedby="dkz-help"
+              />
+              <p id="dkz-help" className="mt-1 text-xs text-muted-foreground">
+                Die Zuordnung wird innerhalb dieser DKZ gesucht.
+              </p>
+            </>
+          )}
         </section>
         <section className="panel">
-          <h2 className="panel-title"><Database className="h-4 w-4" /> Text-Dump <span className="ml-auto font-mono text-xs text-muted-foreground">{rules.length} Regeln erkannt</span></h2>
+          <h2 className="panel-title"><Database className="h-4 w-4" /> Text-Dump <span className="ml-auto font-mono text-xs text-muted-foreground">{ruleCountLabel}</span></h2>
           <textarea className="field h-48 resize-y font-mono text-xs" value={dump} onChange={(e) => setDump(e.target.value)} placeholder="Intranet-/SharePoint-Text hier einfügen…" />
         </section>
       </div>
 
       <div className="mx-auto max-w-6xl space-y-6 px-6 pb-16">
-        {nachname.trim() && rules.length > 0 && (
+        {nachname.trim() && isDkzDump && !dkzReady && (
+          <section className="panel flex items-center gap-2 text-muted-foreground">
+            <AlertTriangle className="h-4 w-4" /> Bitte gib eine dreistellige DKZ ein, bevor die Zuordnung ausgewertet wird.
+          </section>
+        )}
+
+        {nachname.trim() && isDkzDump && dkzReady && rules.length === 0 && (
+          <section className="panel flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4" /> Für DKZ {dkz} wurden im Dump keine Regeln gefunden.
+          </section>
+        )}
+
+        {nachname.trim() && rules.length > 0 && dkzReady && (
           match ? (
             <section className="panel border-success match-glow">
-              <p className="flex items-center gap-2 text-sm font-medium text-success"><CheckCircle2 className="h-4 w-4" /> Zuordnung gefunden für {vorname} {nachname}</p>
+              <p className="flex items-center gap-2 text-sm font-medium text-success"><CheckCircle2 className="h-4 w-4" /> Zuordnung gefunden für {vorname} {nachname}{isDkzDump ? ` · DKZ ${dkz}` : ""}</p>
               <div className="mt-3 inline-flex flex-wrap items-baseline gap-3 rounded-xl bg-success-soft px-5 py-4">
                 <span className="font-display text-3xl font-bold text-foreground">{match.name}</span>
                 <span className="font-mono text-lg text-success">— Team {match.orgz}</span>

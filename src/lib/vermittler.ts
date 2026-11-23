@@ -7,6 +7,8 @@ export type Rule = {
   line: string;
 };
 
+export type DkzRule = Rule & { dkz: string };
+
 export const norm = (s: string) =>
   s
     .toLowerCase()
@@ -21,16 +23,21 @@ export const norm = (s: string) =>
 const RANGE_LINE = /^([\p{L}]+)\s*[-–—−]\s*([\p{L}]+)\s+(.+?)$/u;
 const TEAM_LINE = /^(?:Team|OrgZ)\s*:?\s*(\d{2,4})$/i;
 const ROW_ORGZ = /^(.*?)\s+(\d{2,4})$/u;
+const DKZ_ROW = /^(\d{3})\s+([\p{L}]+(?:\s*[-–—−]\s*[\p{L}]+)?)\s+(.+?)\s+(\d{2,4})$/u;
+const DKZ_RANGE = /^([\p{L}]+)(?:\s*[-–—−]\s*([\p{L}]+))?$/u;
+
+function normalizedLines(text: string) {
+  return text
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\u00A0\u202F]/g, " ")
+    .split(/\r?\n/);
+}
 
 export function parseRules(text: string): Rule[] {
   const rules: Rule[] = [];
   let sectionOrgz = "";
-  const lines = text
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[\u00A0\u202F]/g, " ")
-    .split(/\r?\n/);
 
-  for (const raw of lines) {
+  for (const raw of normalizedLines(text)) {
     const line = raw.replace(/\s+/g, " ").trim();
     if (!line) continue;
 
@@ -54,6 +61,33 @@ export function parseRules(text: string): Rule[] {
       to,
       name,
       orgz: rowOrgzMatch?.[2] ?? sectionOrgz,
+      line: raw.trim(),
+    });
+  }
+
+  return rules;
+}
+
+export function parseDkzRules(text: string): DkzRule[] {
+  const rules: DkzRule[] = [];
+
+  for (const raw of normalizedLines(text)) {
+    const line = raw.replace(/\s+/g, " ").trim();
+    const rowMatch = line.match(DKZ_ROW);
+    if (!rowMatch) continue;
+
+    const [, dkz = "", rangeText = "", name = "", orgz = ""] = rowMatch;
+    const rangeMatch = rangeText.match(DKZ_RANGE);
+    if (!rangeMatch || !/\p{L}/u.test(name)) continue;
+
+    const [, from = "", to = from] = rangeMatch;
+    rules.push({
+      id: rules.length,
+      dkz,
+      from,
+      to,
+      name: name.trim(),
+      orgz,
       line: raw.trim(),
     });
   }
